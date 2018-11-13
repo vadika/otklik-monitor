@@ -1,0 +1,9 @@
+connect:
+  vk_bot_key: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  tg_bot_key: yyyyyyyy:ZZZZZZZZZZZZZZZZ
+  poll: 60
+
+info:
+  group_name: "СПБ ДТП и ЧП"
+  group_id: spb_today
+  keywords: пожар, горит, дым, загорел, тушат
