@@ -20,9 +20,10 @@ class Config:
 
 conf = Config
 
+conf_file = "app_config.yml"
 
 def parseConfig():
-    with open("app_config.yml", 'r') as ymlfile:
+    with open(conf_file, 'r') as ymlfile:
         cfg = yaml.load(ymlfile)
 
     conf.vk_bot_key = cfg['connect']['vk_bot_key']
@@ -59,14 +60,35 @@ def tg_send_mess(chat, text):
     return response
 
 
+# parse arguments : --init, --conf
+
+parser = argparse.ArgumentParser(description='vkontakte data analyzer (c) 2018 otklik.team')
+
+#Don't forget to parse arguments
+
+parser.add_argument('--init', action='store_true',
+                    help='Initialize parameters from VK and tg')
+
+parser.add_argument('--conf', type=str, nargs='?',
+                    help='Specify config file (default app_config.yml)')
+
+
+args = parser.parse_args()
+
+if(args.conf):
+        conf_file = args.conf
+
 # parse config
 parseConfig()
 
 tg_url = "https://api.telegram.org/bot" + conf.tg_bot_key + "/"
 
-logging.info(conf.keywords)
+logging.info("Filtering by keywords = " + conf.keywords)
 
-# parse arguments : --init, --conf
+
+
+
+
 
 # prepare VK api
 
@@ -81,7 +103,12 @@ logging.info("VK group id = "+str(group_id))
 posts = api.wall.get(owner_id="-" + str(group_id), count=1)
 logging.info("Current post count = " + str(posts["count"]))
 
-with open(conf.group_id + ".yml", 'r') as ymlfile:
+if(args.init):
+    with open(conf.group_id + "-state.yml", 'w') as ymlfile:
+        yaml.dump({"lastcount": posts["count"]}, ymlfile)
+
+
+with open(conf.group_id + "-state.yml", 'r') as ymlfile:
     cfg = yaml.load(ymlfile)
 
 logging.info("Last run post count = " + str(cfg["lastcount"]))
@@ -90,7 +117,7 @@ posts_pending = posts["count"] - cfg["lastcount"]
 
 if (posts_pending) > 0:
     logging.info("Messages pending to process " + str(posts_pending))
-    posts = api.wall.get(owner_id="-" + str(group_id), count=posts_pending + 1)
+    posts = api.wall.get(owner_id="-" + str(group_id), count=posts_pending)
 
     for post in posts["items"]:
         logging.info(post["text"])
@@ -101,7 +128,7 @@ if (posts_pending) > 0:
         key_flag = False
         pattern = re.compile("^\s+|\s*,\s*|\s+$")
         for x in pattern.split(conf.keywords):
-            if x in post["text"]:
+            if re.search(x , post["text"], re.IGNORECASE):
                 key_flag = True
 
         tg_chat_id = tg_get_chat_id(tg_last_update(tg_get_updates_json(tg_url)))
@@ -117,5 +144,5 @@ if (posts_pending) > 0:
                              group_id) + '_' + str(
                              post_id))
 
-with open(conf.group_id + ".yml", 'w') as ymlfile:
+with open(conf.group_id + "-state.yml", 'w') as ymlfile:
     yaml.dump({"lastcount": posts["count"]}, ymlfile)
