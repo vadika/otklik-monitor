@@ -67,10 +67,41 @@ def tg_get_chat_id(update):
     return chat_id
 
 
-def tg_send_mess(chat, text, silent=False):
-    params = {'chat_id': chat, 'text': text, 'disable_notification': silent}
+def tg_send_mess(chat, text, silent=False, no_preview=False, parse="Markdown"):
+    params = {'chat_id': chat, 'text': text, 'disable_notification': silent, 'disable_web_page_preview': no_preview,
+              "parse_mode": parse}
     response = requests.post(tg_url + 'sendMessage', data=params)
     return response
+
+
+# supplementary functions
+
+def strstrip(s, count):
+    s = s.replace("\r", "")
+    s = s.replace("\n", "")
+    w = s.split(" ")
+    logging.debug("str len" + str(len(w)))
+    # if len(w) < count:
+    #     return s
+    # else:
+    return ' '.join(w[0:count - 1])
+
+
+# digest functions
+def digest_truncate(digest_name):
+    with open(str(digest_name)+".digest", "w") as f:
+        f.close()
+
+def digest_append(digest_name, record):
+    with open(str(digest_name)+".digest", "a") as f:
+        f.write(record)
+        f.close()
+
+def digest_load(digest_name):
+    with open(str(digest_name) + ".digest", "r") as f:
+        buf = f.read()
+        f.close()
+        return buf
 
 
 # parse arguments : --init, --conf, --test
@@ -87,6 +118,12 @@ parser.add_argument('--conf', type=str, nargs='?',
 
 parser.add_argument('--test', action='store_true',
                     help='Test run (do not post anything, do not move counters)')
+
+parser.add_argument('--loud', action='store_true',
+                    help='Publish all records, not only positive ')
+
+parser.add_argument('--digest', action='store_true',
+                    help='Publish and rotate digest ')
 
 args = parser.parse_args()
 
@@ -177,22 +214,28 @@ if (posts_pending) > 0:
 
         tg_chat_id = conf.tg_chat_id
 
+
+        digest_append(conf.group_id, str("ДА " if key_flag else "НЕТ ") + 'https://vk.com/' + conf.group_id + '?w=wall-' + str(
+                                 group_id) + '_' + str(post_id) + " -- " + strstrip(post["text"], 30) + "\n")
+
+
         if args.test:
             continue
 
         if key_flag:
             tg_send_mess(tg_chat_id,
-                         "ДА " + key_word + " " + conf.group_name + '\n  https://vk.com/' + conf.group_id + '?w=wall-' + str(
+                         "*ДА " + key_word + " [" + conf.group_name + '](https://vk.com/' + conf.group_id + '?w=wall-' + str(
                              group_id) + '_' + str(
-                             post_id))
+                             post_id) + ") *")
         else:
-            tg_send_mess(tg_chat_id,
-                         "НЕТ " + conf.group_name + ' -- https://vk.com/' + conf.group_id + '?w=wall-' + str(
-                             group_id) + '_' + str(
-                             post_id), silent=True)
+            if args.loud:
+                tg_send_mess(tg_chat_id,
+                             "НЕТ [" + conf.group_name + '](https://vk.com/' + conf.group_id + '?w=wall-' + str(
+                                 group_id) + '_' + str(post_id) + ') -- ' + strstrip(post["text"], 12), silent=True,
+                             no_preview=True)
 
-if not args.test:
-    with open(conf.group_id + "-state.yml", 'w') as ymlfile:
-        if len(state_new) == 0:
-            state_new = state["posts"]
-        yaml.dump({"lastcount": posts["count"], "posts": state_new}, ymlfile)
+        if not args.test:
+            with open(conf.group_id + "-state.yml", 'w') as ymlfile:
+                if len(state_new) == 0:
+                    state_new = state["posts"]
+                yaml.dump({"lastcount": posts["count"], "posts": state_new}, ymlfile)
