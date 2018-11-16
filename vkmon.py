@@ -11,6 +11,7 @@ logging.basicConfig(level=logging.INFO)
 class Config:
     vk_bot_key = ""
     tg_bot_key = ""
+    tg_chat_id = ""
     poll = ""
 
     group_name = ""
@@ -21,6 +22,8 @@ class Config:
 conf = Config
 
 conf_file = "app_config.yml"
+tg_conf_file = "_telegram.yml"
+kw_conf_file = "_keywords.yml"
 
 
 def parseConfig():
@@ -28,12 +31,21 @@ def parseConfig():
         cfg = yaml.load(ymlfile)
 
     conf.vk_bot_key = cfg['connect']['vk_bot_key']
-    conf.tg_bot_key = cfg['connect']['tg_bot_key']
     conf.poll = cfg['connect']['poll']
 
     conf.group_name = cfg['info']['group_name']
     conf.group_id = cfg['info']['group_id']
-    conf.keywords = cfg['info']['keywords']
+
+    with open(kw_conf_file, 'r') as ymlfile:
+        cfg = yaml.load(ymlfile)
+
+    conf.keywords = cfg['keywords']
+
+    with open(tg_conf_file, 'r') as ymlfile:
+        cfg = yaml.load(ymlfile)
+
+    conf.tg_bot_key = cfg['tg_bot_key']
+    conf.tg_chat_id = cfg['tg_chat_id']
 
     return
 
@@ -55,8 +67,8 @@ def tg_get_chat_id(update):
     return chat_id
 
 
-def tg_send_mess(chat, text):
-    params = {'chat_id': chat, 'text': text}
+def tg_send_mess(chat, text, silent=False):
+    params = {'chat_id': chat, 'text': text, 'disable_notification': silent}
     response = requests.post(tg_url + 'sendMessage', data=params)
     return response
 
@@ -138,7 +150,7 @@ if (posts_pending) > 0:
 
         # duplicate or pinned post protection
         state_new.append(post_id)
-        print("!!! {}", state_new)
+        logging.debug("!!! {}", state_new)
 
         if post_id in state["posts"]:
             logging.info("duplicate " + str(post_id))
@@ -146,7 +158,7 @@ if (posts_pending) > 0:
             post = posts["items"][i]
             post_id = post["id"]
             state_new.append(post_id)
-            print("??? {}", state_new)
+            logging.debug("??? {}", state_new)
 
         logging.info(post["text"])
         logging.info(post["id"])
@@ -154,26 +166,30 @@ if (posts_pending) > 0:
         # send message to tg
 
         key_flag = False
+        key_word = ""
         pattern = re.compile("^\s+|\s*,\s*|\s+$")
         for x in pattern.split(conf.keywords):
             if re.search(x, post["text"], re.IGNORECASE):
                 key_flag = True
+                key_word = x
 
-        tg_chat_id = tg_get_chat_id(tg_last_update(tg_get_updates_json(tg_url)))
+        # tg_chat_id = tg_get_chat_id(tg_last_update(tg_get_updates_json(tg_url)))
+
+        tg_chat_id = conf.tg_chat_id
 
         if args.test:
             continue
 
         if key_flag:
             tg_send_mess(tg_chat_id,
-                         "ДА " + conf.group_name + ' -- https://vk.com/' + conf.group_id + '?w=wall-' + str(
+                         "ДА " + key_word + " " + conf.group_name + '\n  https://vk.com/' + conf.group_id + '?w=wall-' + str(
                              group_id) + '_' + str(
                              post_id))
         else:
             tg_send_mess(tg_chat_id,
                          "НЕТ " + conf.group_name + ' -- https://vk.com/' + conf.group_id + '?w=wall-' + str(
                              group_id) + '_' + str(
-                             post_id))
+                             post_id), silent=True)
 
 if not args.test:
     with open(conf.group_id + "-state.yml", 'w') as ymlfile:
